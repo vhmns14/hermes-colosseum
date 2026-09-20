@@ -38,19 +38,24 @@ export function getRoleDistribution(playerCount: number): Role[] {
 export function initializePlayers(
   names: string[],
   hermesAsMastermind: boolean = true,
-  modelName: string = "gpt-4o-mini"
+  modelConfig: string | Record<string, string> = "gpt-4o-mini"
 ): Player[] {
   const roles = getRoleDistribution(names.length);
 
   return names.map((name, idx) => {
     const isHermes = name.toLowerCase().includes("hermes");
+    const assignedModel =
+      typeof modelConfig === "string"
+        ? modelConfig
+        : modelConfig[name] || "gpt-4o-mini";
+
     return {
       id: `p-${idx + 1}`,
       name,
       role: roles[idx],
       isAlive: true,
       isAI: true,
-      model: modelName,
+      model: assignedModel,
       isHermesMastermind: isHermes && hermesAsMastermind,
     };
   });

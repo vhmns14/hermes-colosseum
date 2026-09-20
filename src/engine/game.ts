@@ -40,8 +40,12 @@ export class GameEngine {
     };
   }
 
-  setup(playerNames: string[], hermesAsMastermind: boolean = true) {
-    const players = initializePlayers(playerNames, hermesAsMastermind);
+  setup(
+    playerNames: string[],
+    hermesAsMastermind: boolean = true,
+    modelConfig: string | Record<string, string> = "gpt-4o-mini"
+  ) {
+    const players = initializePlayers(playerNames, hermesAsMastermind, modelConfig);
     this.state.players = players;
     const allIds = players.map((p) => p.id);
 

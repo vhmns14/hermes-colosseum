@@ -3,6 +3,9 @@ export interface LLMRequest {
   userPrompt: string;
   temperature?: number;
   maxTokens?: number;
+  model?: string;
+  playerName?: string;
+  playerId?: string;
 }
 
 export interface LLMResponse {
@@ -102,39 +105,103 @@ export class MockLLMProvider implements LLMProvider {
   }
 }
 
+export interface OpenAILLMOptions {
+  playerModels?: Record<string, string>;
+  forceStream?: boolean;
+}
+
 export class OpenAILLMProvider implements LLMProvider {
   private baseURL: string;
   private apiKey: string;
-  private model: string;
+  private defaultModel: string;
+  private playerModels?: Record<string, string>;
+  private forceStream: boolean;
 
-  constructor(baseURL: string, apiKey: string, model: string = "gpt-4o-mini") {
+  constructor(
+    baseURL: string,
+    apiKey: string,
+    defaultModel: string = "gpt-4o-mini",
+    options: OpenAILLMOptions = {}
+  ) {
     this.baseURL = baseURL.replace(/\/$/, "");
     this.apiKey = apiKey;
-    this.model = model;
+    this.defaultModel = defaultModel;
+    this.playerModels = options.playerModels;
+    this.forceStream = options.forceStream ?? false;
   }
 
   async complete(req: LLMRequest): Promise<LLMResponse> {
+    const selectedModel =
+      req.model ||
+      (req.playerName && this.playerModels?.[req.playerName]) ||
+      this.defaultModel;
+
+    const useStream =
+      this.forceStream ||
+      this.baseURL.includes("20128") ||
+      selectedModel.startsWith("cx/");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "HermesColosseum/1.0",
+    };
+    if (this.apiKey && this.apiKey !== "none" && this.apiKey !== "mock-key") {
+      headers["Authorization"] = `Bearer ${this.apiKey}`;
+    }
+
+    const payload: Record<string, any> = {
+      model: selectedModel,
+      messages: [
+        { role: "system", content: req.systemPrompt },
+        { role: "user", content: req.userPrompt },
+      ],
+      temperature: req.temperature ?? 0.7,
+      max_tokens: req.maxTokens ?? 350,
+    };
+
+    if (useStream) {
+      payload.stream = true;
+    }
+
     const res = await fetch(`${this.baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-        "User-Agent": "HermesColosseum/1.0",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: "system", content: req.systemPrompt },
-          { role: "user", content: req.userPrompt },
-        ],
-        temperature: req.temperature ?? 0.7,
-        max_tokens: req.maxTokens ?? 350,
-      }),
+      headers,
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`LLM provider error (${res.status}): ${errText}`);
+      throw new Error(
+        `LLM provider error (${res.status}) on model [${selectedModel}]: ${errText.slice(0, 200)}`
+      );
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    if (useStream || contentType.includes("text/event-stream")) {
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("No readable stream received from LLM provider");
+      }
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data:") && !trimmed.includes("[DONE]")) {
+            try {
+              const jsonStr = trimmed.slice(5).trim();
+              const parsed = JSON.parse(jsonStr);
+              const delta = parsed.choices?.[0]?.delta?.content || "";
+              accumulated += delta;
+            } catch {}
+          }
+        }
+      }
+      return { content: accumulated };
     }
 
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };

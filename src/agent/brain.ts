@@ -71,11 +71,18 @@ What is your inner calculation, and what do you say aloud to the village? Respon
         systemPrompt,
         userPrompt,
         temperature: isHermes ? 0.75 : 0.6,
+        model: player.model,
+        playerName: player.name,
+        playerId: player.id,
       });
 
-      // Parse JSON from response
-      const cleaned = resp.content.trim().replace(/^```json/i, "").replace(/```$/, "").trim();
-      const parsed = JSON.parse(cleaned);
+      // Parse JSON from response (handling markdown fences or surrounding commentary)
+      let raw = resp.content.trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        raw = jsonMatch[0];
+      }
+      const parsed = JSON.parse(raw);
 
       return {
         innerThought: parsed.inner_thought || "Observing the room.",

@@ -13,10 +13,11 @@ export class TerminalUI {
     const cards = players.map((p) => {
       const statusIcon = p.isAlive ? `${c.green}● ALIVE${c.reset}` : `${c.red}✖ DEAD${c.reset}`;
       const roleStr = `${c.gray}(${p.role})${c.reset}`;
+      const modelStr = p.model ? ` ${c.cyan}[${p.model}]${c.reset}` : "";
       const nameStr = p.isHermesMastermind
         ? `${c.bold}${c.magenta}★ ${p.name} [HERMES]${c.reset}`
         : `${c.bold}${c.white}${p.name}${c.reset}`;
-      return `  [${p.id}] ${nameStr} ${roleStr} ${statusIcon}`;
+      return `  [${p.id}] ${nameStr} ${roleStr}${modelStr} ${statusIcon}`;
     });
     console.log(cards.join("\n"));
     console.log("");
@@ -28,8 +29,9 @@ export class TerminalUI {
     );
   }
 
-  printStatement(stmt: Statement) {
-    console.log(`\n${c.bold}${c.cyan}🗣️  ${stmt.speakerName}:${c.reset} "${stmt.publicUtterance}"`);
+  printStatement(stmt: Statement, modelTag?: string) {
+    const tagStr = modelTag ? ` ${c.gray}(${modelTag})${c.reset}` : "";
+    console.log(`\n${c.bold}${c.cyan}🗣️  ${stmt.speakerName}${tagStr}:${c.reset} "${stmt.publicUtterance}"`);
     console.log(
       `   ${c.magenta}🧠 Inner Monologue:${c.reset} ${c.italic}${stmt.innerThought}${c.reset} ${c.gray}[Tactic: ${stmt.tactic}]${c.reset}`
     );

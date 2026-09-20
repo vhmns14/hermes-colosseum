@@ -36,30 +36,72 @@ async function main() {
 
   ui.printHeader();
 
-  const providerType = flags.provider || process.env.LLM_PROVIDER || "mock";
-  const baseURL = flags["base-url"] || process.env.OPENAI_BASE_URL || "http://localhost:8787/v1";
-  const apiKey = flags["api-key"] || process.env.OPENAI_API_KEY || "mock-key";
-  const model = flags.model || process.env.DEFAULT_MODEL || "gpt-4o-mini";
-  const delayMs = parseInt(flags.delay || "200", 10);
+  const providerType = flags.provider || process.env.LLM_PROVIDER || (flags.vansrouter ? "vansrouter" : "mock");
+  const isVansRouter = providerType === "vansrouter" || flags.vansrouter === "true" || flags.vansrouter === true;
+
+  const baseURL =
+    flags["base-url"] ||
+    process.env.OPENAI_BASE_URL ||
+    (isVansRouter ? "http://127.0.0.1:20128/v1" : "http://localhost:8787/v1");
+
+  const apiKey =
+    flags["api-key"] ||
+    process.env.OPENAI_API_KEY ||
+    (isVansRouter ? "none" : "mock-key");
+
+  const defaultModel = flags.model || process.env.DEFAULT_MODEL || (isVansRouter ? "cx/gpt-5.6-terra" : "gpt-4o-mini");
   const outDir = flags.out || "./reports";
 
-  console.log(`${c.gray}Configuration:${c.reset} Provider: ${c.bold}${providerType}${c.reset} | Model: ${c.bold}${model}${c.reset}\n`);
+  let playerModels: Record<string, string> | undefined;
+  let playerNames = ["Hermes (Mastermind)", "Alice", "Bob", "Charlie", "Dave"];
+
+  if (isVansRouter) {
+    playerNames = [
+      "Hermes (Mastermind)",
+      "Luna",
+      "Terra",
+      "Sol",
+      "Astra",
+    ];
+    playerModels = {
+      "Hermes (Mastermind)": "cx/gpt-5.6-terra",
+      Luna: "cx/gpt-5.6-luna",
+      Terra: "cx/gpt-5.6-terra",
+      Sol: "cx/gpt-5.5",
+      Astra: "cx/gpt-5.5-review",
+    };
+  }
+
+  console.log(
+    `${c.gray}Configuration:${c.reset} Provider: ${c.bold}${providerType}${c.reset} | Endpoint: ${c.cyan}${baseURL}${c.reset}`
+  );
+  if (playerModels) {
+    console.log(`${c.gray}Arena Roster (VansRouter Models):${c.reset}`);
+    for (const [pName, mName] of Object.entries(playerModels)) {
+      console.log(`  • ${pName.padEnd(22)} ➜ ${c.cyan}${mName}${c.reset}`);
+    }
+    console.log("");
+  } else {
+    console.log(`Model: ${c.bold}${defaultModel}${c.reset}\n`);
+  }
 
   let llm: LLMProvider;
-  if (providerType === "openai" || providerType === "agentrouter") {
-    llm = new OpenAILLMProvider(baseURL, apiKey, model);
+  if (isVansRouter || providerType === "openai" || providerType === "agentrouter") {
+    llm = new OpenAILLMProvider(baseURL, apiKey, defaultModel, {
+      playerModels,
+      forceStream: isVansRouter || defaultModel.startsWith("cx/"),
+    });
   } else {
     llm = new MockLLMProvider();
   }
-
-  const defaultPlayers = ["Hermes (Mastermind)", "Alice", "Bob", "Charlie", "Dave"];
 
   const engine = new GameEngine(llm, {
     onPhaseChange: (phase, round) => {
       ui.printPhase(phase, round);
     },
     onStatement: (stmt) => {
-      ui.printStatement(stmt);
+      const speaker = engine.state.players.find((p) => p.id === stmt.speakerId);
+      ui.printStatement(stmt, speaker?.model);
     },
     onNightResult: (res) => {
       ui.printNightResult(res, engine.state.players);
@@ -72,12 +114,11 @@ async function main() {
     },
   });
 
-  engine.setup(defaultPlayers, true);
+  engine.setup(playerNames, true, playerModels || defaultModel);
   ui.printRoundtable(engine.state.players);
 
-  console.log(`${c.bold}${c.green}⚔️  Simulation started! Running autonomous match...${c.reset}\n`);
-
-  const state = await engine.runFullMatch(4);
+  const maxRounds = parseInt(flags.rounds || flags["max-rounds"] || "3", 10);
+  const state = await engine.runFullMatch(maxRounds);
 
   // Post-match analytics
   const report = analyzeMatch(state);
