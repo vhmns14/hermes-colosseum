@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Environment & credentials
+.env
+.env.*
+!.env.example
+
+# Databases (Strict rule)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Build & runtime artifacts
+dist/
+reports/*.html
+reports/*.md
+*.log
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

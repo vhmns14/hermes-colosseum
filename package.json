@@ -1,0 +1,25 @@
+{
+  "name": "hermes-colosseum",
+  "version": "1.0.0",
+  "description": "Autonomous Social Deduction, Persuasion & Strategic Deception Engine for Multi-Agent LLMs",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "play": "bun run src/cli.ts play",
+    "sim": "bun run src/cli.ts sim",
+    "test": "bun test"
+  },
+  "keywords": [
+    "ai-agents",
+    "multi-agent",
+    "game-theory",
+    "deception",
+    "persuasion",
+    "werewolf",
+    "hermes",
+    "llm-benchmark"
+  ],
+  "author": "vhmns",
+  "license": "MIT"
+}
