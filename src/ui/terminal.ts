@@ -15,7 +15,7 @@ export class TerminalUI {
       const roleStr = `${c.gray}(${p.role})${c.reset}`;
       const modelStr = p.model ? ` ${c.cyan}[${p.model}]${c.reset}` : "";
       const nameStr = p.isHermesMastermind
-        ? `${c.bold}${c.magenta}★ ${p.name} [HERMES]${c.reset}`
+        ? `${c.bold}${c.magenta}★ ${p.name} [MASTERMIND]${c.reset}`
         : `${c.bold}${c.white}${p.name}${c.reset}`;
       return `  [${p.id}] ${nameStr} ${roleStr}${modelStr} ${statusIcon}`;
     });

@@ -209,6 +209,23 @@ export class GameEngine {
           if (listener.id === speaker.id) continue;
           const listenerMem = this.memories.get(listener.id)!;
 
+          // Mastermind cognitive influence
+          if (speaker.isHermesMastermind) {
+            if (turnDecision.tactic === "BUILD_TRUST" || turnDecision.tactic === "APPEAL_TO_LOGIC") {
+              listenerMem.adjustTrust(speaker.id, +12, "Mastermind persuasive empathy");
+            }
+            if (
+              turnDecision.targetId &&
+              (turnDecision.tactic === "DEFLECT_AND_FRAME" ||
+                turnDecision.tactic === "BANDWAGON_LEADER" ||
+                turnDecision.tactic === "PROBE_ACCUSATION")
+            ) {
+              if (listener.id !== turnDecision.targetId) {
+                listenerMem.adjustTrust(turnDecision.targetId, -18, "Mastermind subtle psychological frame");
+              }
+            }
+          }
+
           // If speaker is accusing a player that listener trusts, listener trusts speaker less
           if (turnDecision.targetId) {
             const targetTrust = listenerMem.getTrust(turnDecision.targetId);

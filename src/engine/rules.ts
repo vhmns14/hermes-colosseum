@@ -42,8 +42,27 @@ export function initializePlayers(
 ): Player[] {
   const roles = getRoleDistribution(names.length);
 
+  // If mastermind is enabled, guarantee the mastermind gets the Werewolf role to manipulate the game
+  if (hermesAsMastermind) {
+    let mastermindIdx = names.findIndex((n) => n.toLowerCase().includes("antigravity"));
+    if (mastermindIdx === -1) {
+      mastermindIdx = names.findIndex((n) => n.toLowerCase().includes("hermes"));
+    }
+
+    if (mastermindIdx !== -1 && roles[mastermindIdx] !== "werewolf") {
+      const wolfIdx = roles.indexOf("werewolf");
+      if (wolfIdx !== -1) {
+        const temp = roles[mastermindIdx];
+        roles[mastermindIdx] = roles[wolfIdx];
+        roles[wolfIdx] = temp;
+      }
+    }
+  }
+
   return names.map((name, idx) => {
-    const isHermes = name.toLowerCase().includes("hermes");
+    const isMastermind =
+      name.toLowerCase().includes("hermes") ||
+      name.toLowerCase().includes("antigravity");
     const assignedModel =
       typeof modelConfig === "string"
         ? modelConfig
@@ -56,7 +75,7 @@ export function initializePlayers(
       isAlive: true,
       isAI: true,
       model: assignedModel,
-      isHermesMastermind: isHermes && hermesAsMastermind,
+      isHermesMastermind: isMastermind && hermesAsMastermind,
     };
   });
 }

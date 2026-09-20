@@ -57,18 +57,20 @@ async function main() {
 
   if (isVansRouter) {
     playerNames = [
-      "Hermes (Mastermind)",
+      "Antigravity (Mastermind)",
+      "Hermes",
       "Luna",
       "Terra",
       "Sol",
       "Astra",
     ];
     playerModels = {
-      "Hermes (Mastermind)": "cx/gpt-5.6-terra",
+      "Antigravity (Mastermind)": "cx/gpt-5.6-terra",
+      Hermes: "cx/gpt-5.5",
       Luna: "cx/gpt-5.6-luna",
-      Terra: "cx/gpt-5.6-terra",
-      Sol: "cx/gpt-5.5",
-      Astra: "cx/gpt-5.5-review",
+      Terra: "cx/gpt-5.6-terra-review",
+      Sol: "cx/gpt-5.5-review",
+      Astra: "cx/gpt-5.6-luna-review",
     };
   }
 
