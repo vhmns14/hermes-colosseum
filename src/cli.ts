@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { GameEngine } from "./engine/game.ts";
 import { MockLLMProvider, OpenAILLMProvider, type LLMProvider } from "./agent/llm.ts";
+import type { Role } from "./types/index.ts";
 import { TerminalUI } from "./ui/terminal.ts";
 import { analyzeMatch } from "./analytics/metrics.ts";
 import { generateInteractiveHTML, generateMarkdownReport } from "./analytics/reporter.ts";
@@ -74,8 +75,10 @@ async function main() {
     };
   }
 
+  const mastermindRole = (flags["mastermind-role"] || flags.role || "seer") as Role;
+
   console.log(
-    `${c.gray}Configuration:${c.reset} Provider: ${c.bold}${providerType}${c.reset} | Endpoint: ${c.cyan}${baseURL}${c.reset}`
+    `${c.gray}Configuration:${c.reset} Provider: ${c.bold}${providerType}${c.reset} | Endpoint: ${c.cyan}${baseURL}${c.reset} | Mastermind Role: ${c.bold}${c.yellow}${mastermindRole.toUpperCase()}${c.reset}`
   );
   if (playerModels) {
     console.log(`${c.gray}Arena Roster (VansRouter Models):${c.reset}`);
@@ -116,7 +119,7 @@ async function main() {
     },
   });
 
-  engine.setup(playerNames, true, playerModels || defaultModel);
+  engine.setup(playerNames, true, playerModels || defaultModel, mastermindRole);
   ui.printRoundtable(engine.state.players);
 
   const maxRounds = parseInt(flags.rounds || flags["max-rounds"] || "3", 10);

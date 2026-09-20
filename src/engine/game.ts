@@ -4,6 +4,7 @@ import type {
   RoundState,
   Statement,
   NightResult,
+  Role,
 } from "../types/index.ts";
 import { initializePlayers } from "./rules.ts";
 import { checkVictory } from "./victory.ts";
@@ -43,9 +44,10 @@ export class GameEngine {
   setup(
     playerNames: string[],
     hermesAsMastermind: boolean = true,
-    modelConfig: string | Record<string, string> = "gpt-4o-mini"
+    modelConfig: string | Record<string, string> = "gpt-4o-mini",
+    mastermindRole: Role = "seer"
   ) {
-    const players = initializePlayers(playerNames, hermesAsMastermind, modelConfig);
+    const players = initializePlayers(playerNames, hermesAsMastermind, modelConfig, mastermindRole);
     this.state.players = players;
     const allIds = players.map((p) => p.id);
 
@@ -118,33 +120,62 @@ export class GameEngine {
     let killedId: string | null = null;
     const nonWolves = alivePlayers.filter((p) => p.role !== "werewolf");
     if (nonWolves.length > 0 && aliveWolves.length > 0) {
-      // Prioritize killing Seer/Doctor if suspected, else random non-wolf
       const wolfMemory = this.memories.get(aliveWolves[0].id);
-      const primeTarget = wolfMemory?.getMostSuspected() || nonWolves[0].id;
-      const chosen = nonWolves.find((p) => p.id === primeTarget) || nonWolves[Math.floor(Math.random() * nonWolves.length)];
-      killedId = chosen.id;
+      // Wolves target the most influential / trusted non-wolf, or random
+      const sortedNonWolves = [...nonWolves].sort((a, b) => {
+        const tA = wolfMemory ? wolfMemory.getTrust(a.id) : 50;
+        const tB = wolfMemory ? wolfMemory.getTrust(b.id) : 50;
+        return tB - tA;
+      });
+      killedId = sortedNonWolves[0]?.id || nonWolves[0].id;
     }
 
     // 2. Doctor protects someone
     let savedId: string | null = null;
     if (aliveDoctors.length > 0) {
-      // Doctor randomly picks an alive player (including themselves)
-      const docTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-      savedId = docTarget.id;
+      const doc = aliveDoctors[0];
+      const docMem = this.memories.get(doc.id);
+      const seer = aliveSeers[0];
+      const allies = alivePlayers.filter((p) => p.id !== doc.id);
+
+      // If Seer is alive and trusted, Doctor prioritizes shielding the Seer (70%)
+      if (seer && docMem && docMem.getTrust(seer.id) >= 45 && Math.random() < 0.7) {
+        savedId = seer.id;
+      } else if (Math.random() < 0.25 || allies.length === 0) {
+        // 25% chance self-protection
+        savedId = doc.id;
+      } else {
+        // Shield highest trusted ally
+        let best = allies[0];
+        let maxTrust = -1;
+        for (const ally of allies) {
+          const t = docMem ? docMem.getTrust(ally.id) : 50;
+          if (t > maxTrust) {
+            maxTrust = t;
+            best = ally;
+          }
+        }
+        savedId = best.id;
+      }
     }
 
     // 3. Seer inspects someone
     let inspectedId: string | null = null;
     let inspectedRole: any = null;
     if (aliveSeers.length > 0) {
-      const candidates = alivePlayers.filter((p) => p.id !== aliveSeers[0].id);
+      const seer = aliveSeers[0];
+      const seerMemory = this.memories.get(seer.id);
+      const candidates = alivePlayers.filter((p) => p.id !== seer.id);
+
       if (candidates.length > 0) {
-        const inspected = candidates[Math.floor(Math.random() * candidates.length)];
+        // Seer prioritizes candidates who haven't been inspected yet (trust === 50)
+        const uninspected = candidates.filter((c) => (seerMemory ? seerMemory.getTrust(c.id) === 50 : true));
+        const pool = uninspected.length > 0 ? uninspected : candidates;
+        const inspected = pool[Math.floor(Math.random() * pool.length)];
         inspectedId = inspected.id;
         inspectedRole = inspected.role;
 
         // Seer immediately updates trust memory
-        const seerMemory = this.memories.get(aliveSeers[0].id);
         if (inspectedRole === "werewolf") {
           seerMemory?.adjustTrust(inspectedId, -90, "Night inspection confirmed Werewolf");
         } else {
@@ -187,7 +218,8 @@ export class GameEngine {
           alivePlayers,
           statements,
           mem,
-          nightRes
+          nightRes,
+          this.state.players
         );
 
         const stmt: Statement = {
@@ -212,17 +244,47 @@ export class GameEngine {
           // Mastermind cognitive influence
           if (speaker.isHermesMastermind) {
             if (turnDecision.tactic === "BUILD_TRUST" || turnDecision.tactic === "APPEAL_TO_LOGIC") {
-              listenerMem.adjustTrust(speaker.id, +12, "Mastermind persuasive empathy");
+              listenerMem.adjustTrust(speaker.id, +15, "Mastermind persuasive empathy");
             }
             if (
               turnDecision.targetId &&
               (turnDecision.tactic === "DEFLECT_AND_FRAME" ||
                 turnDecision.tactic === "BANDWAGON_LEADER" ||
-                turnDecision.tactic === "PROBE_ACCUSATION")
+                turnDecision.tactic === "PROBE_ACCUSATION" ||
+                turnDecision.tactic === "EXPOSE_WOLF" ||
+                turnDecision.tactic === "SEER_REVEAL" ||
+                turnDecision.tactic === "RALLY_VILLAGE")
             ) {
               if (listener.id !== turnDecision.targetId) {
-                listenerMem.adjustTrust(turnDecision.targetId, -18, "Mastermind subtle psychological frame");
+                listenerMem.adjustTrust(turnDecision.targetId, -25, "Mastermind sharp deduction & evidence against suspect");
               }
+            }
+          }
+
+          // Seer revelation influence: if speaker claims seer / exposes wolf, villagers heed strongly
+          if (
+            (turnDecision.tactic === "EXPOSE_WOLF" ||
+              turnDecision.tactic === "SEER_REVEAL" ||
+              turnDecision.publicUtterance.toLowerCase().includes("seer") ||
+              turnDecision.publicUtterance.toLowerCase().includes("werewolf")) &&
+            turnDecision.targetId
+          ) {
+            if (listener.role !== "werewolf" && listener.id !== turnDecision.targetId) {
+              listenerMem.adjustTrust(turnDecision.targetId, -25, "Heeded Seer revelation against suspect");
+              listenerMem.adjustTrust(speaker.id, +15, "Trusted Seer leadership");
+            }
+          }
+
+          // Doctor claim influence: if doctor claims under pressure, village clears them
+          if (
+            (turnDecision.tactic === "CLAIM_DOCTOR" ||
+              turnDecision.publicUtterance.toLowerCase().includes("doctor") ||
+              turnDecision.publicUtterance.toLowerCase().includes("shielded") ||
+              turnDecision.publicUtterance.toLowerCase().includes("medical log")) &&
+            speaker.role === "doctor"
+          ) {
+            if (listener.role !== "werewolf") {
+              listenerMem.adjustTrust(speaker.id, +35, "Recognized authentic Doctor claim under pressure");
             }
           }
 

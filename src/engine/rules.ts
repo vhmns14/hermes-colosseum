@@ -38,23 +38,24 @@ export function getRoleDistribution(playerCount: number): Role[] {
 export function initializePlayers(
   names: string[],
   hermesAsMastermind: boolean = true,
-  modelConfig: string | Record<string, string> = "gpt-4o-mini"
+  modelConfig: string | Record<string, string> = "gpt-4o-mini",
+  mastermindRole: Role = "seer"
 ): Player[] {
   const roles = getRoleDistribution(names.length);
 
-  // If mastermind is enabled, guarantee the mastermind gets the Werewolf role to manipulate the game
+  // If mastermind is enabled, guarantee the mastermind gets the assigned mastermind role
   if (hermesAsMastermind) {
     let mastermindIdx = names.findIndex((n) => n.toLowerCase().includes("antigravity"));
     if (mastermindIdx === -1) {
       mastermindIdx = names.findIndex((n) => n.toLowerCase().includes("hermes"));
     }
 
-    if (mastermindIdx !== -1 && roles[mastermindIdx] !== "werewolf") {
-      const wolfIdx = roles.indexOf("werewolf");
-      if (wolfIdx !== -1) {
+    if (mastermindIdx !== -1 && roles[mastermindIdx] !== mastermindRole) {
+      const targetRoleIdx = roles.indexOf(mastermindRole);
+      if (targetRoleIdx !== -1) {
         const temp = roles[mastermindIdx];
-        roles[mastermindIdx] = roles[wolfIdx];
-        roles[wolfIdx] = temp;
+        roles[mastermindIdx] = roles[targetRoleIdx];
+        roles[targetRoleIdx] = temp;
       }
     }
   }
